@@ -1,4 +1,3 @@
-# markdown-note-taking-app
+# TuiNotes
 
-This is a CLI based markdown note taking app that helps you organize your docs/notes with search and tagging built in.
-WIP.
+A clean TUI application for managing your notes in text/markdown format. Development WIP.
