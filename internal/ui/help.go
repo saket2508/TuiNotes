@@ -68,9 +68,19 @@ func (m *HelpModel) View() string {
 	s += formatHelpItem("n", "Create new note")
 	s += formatHelpItem("e, Enter", "Edit selected note")
 	s += formatHelpItem("d", "Delete selected note")
+	s += formatHelpItem("Ctrl+S", "Toggle search mode")
 	s += formatHelpItem("↑, k", "Move cursor up")
 	s += formatHelpItem("↓, j", "Move cursor down")
 	s += formatHelpItem("?", "Show this help")
+	s += "\n"
+
+	// Search shortcuts
+	s += helpSectionStyle.Render("Search Mode") + "\n"
+	s += formatHelpItem("Ctrl+S", "Enter/exit search mode")
+	s += formatHelpItem("Type", "Search notes (fuzzy matching)")
+	s += formatHelpItem("Enter", "Confirm search")
+	s += formatHelpItem("Esc", "Cancel search")
+	s += formatHelpItem("Backspace", "Delete search character")
 	s += "\n"
 
 	// Editor shortcuts
