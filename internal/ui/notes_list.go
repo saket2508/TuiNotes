@@ -10,29 +10,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-var (
-	titleStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FFFDF5")).
-		Background(lipgloss.Color("#25A065")).
-		Padding(0, 1)
-
-	searchStyle = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("39")).
-		Padding(0, 1).
-		Width(60)
-
-	inactiveSearchStyle = lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("241")).
-		Padding(0, 1).
-		Width(60)
-
-	searchLabelStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("39")).
-		Bold(true)
-)
-
 // NotesListModel manages the notes list view
 type NotesListModel struct {
 	app          *App
@@ -220,22 +197,75 @@ func (m *NotesListModel) View() string {
 		return "Loading notes..."
 	}
 
+	// Use enhanced colors but keep current structure for now
+	titleStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#F1F5F9")).
+		Background(lipgloss.Color("#38BDF8")).
+		Bold(true).
+		Padding(0, 1).
+		MarginBottom(1)
+
+	searchActiveStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#38BDF8")).
+		Foreground(lipgloss.Color("#F1F5F9")).
+		Padding(0, 1)
+
+	searchInactiveStyle := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("#475569")).
+		Foreground(lipgloss.Color("#94A3B8")).
+		Padding(0, 1)
+
+	searchLabelStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#38BDF8")).
+		Bold(true)
+
 	s := titleStyle.Render("Markdown Notes") + "\n\n"
+
+	// Calculate responsive search width
+	searchWidth := func() int {
+		if m.width < 100 {
+			if m.width-10 < 40 {
+				return 40
+			}
+			return m.width - 10
+		} else if m.width < 140 {
+			width := int(float64(m.width) * 0.7)
+			if width < 50 {
+				return 50
+			}
+			if width > 80 {
+				return 80
+			}
+			return width
+		} else {
+			width := int(float64(m.width) * 0.6)
+			if width < 60 {
+				return 60
+			}
+			if width > 100 {
+				return 100
+			}
+			return width
+		}
+	}()
 
 	// Search interface
 	if m.searchMode {
 		s += searchLabelStyle.Render("Search:") + " "
 		if m.searchQuery == "" {
-			s += searchStyle.Render("Type to search...")
+			s += searchActiveStyle.Width(searchWidth).Render("Type to search...")
 		} else {
-			s += searchStyle.Render(m.searchQuery + "_") // Show cursor
+			s += searchActiveStyle.Width(searchWidth).Render(m.searchQuery + "_")
 		}
 	} else {
+		s += searchLabelStyle.Render("Search:") + " "
 		if m.searchQuery != "" {
-			s += searchLabelStyle.Render("Search:") + " " + inactiveSearchStyle.Render(m.searchQuery)
+			s += searchInactiveStyle.Width(searchWidth).Render(m.searchQuery)
 			s += fmt.Sprintf(" (%d results)", len(m.filteredNotes))
 		} else {
-			s += searchLabelStyle.Render("Search:") + " " + inactiveSearchStyle.Render("Press Ctrl+S to search")
+			s += searchInactiveStyle.Width(searchWidth).Render("Press Ctrl+S to search")
 		}
 	}
 
@@ -249,8 +279,10 @@ func (m *NotesListModel) View() string {
 			s += "No notes yet. Press 'n' to create your first note.\n\n"
 		}
 	} else {
-		// Calculate max lines for notes
-		maxLines := m.height - 10 // Reserve space for header, search, controls
+		// Calculate responsive max lines
+		usedHeight := 8
+		available := m.height - usedHeight - 4
+		maxLines := available
 		if maxLines < 5 {
 			maxLines = 5
 		}
@@ -260,23 +292,57 @@ func (m *NotesListModel) View() string {
 			displayNotes = displayNotes[:maxLines]
 		}
 
+		// Calculate responsive title length
+		maxTitleLength := func() int {
+			if m.width < 100 {
+				length := m.width - 8
+				if length < 20 {
+					return 20
+				}
+				if length > 40 {
+					return 40
+				}
+				return length
+			} else if m.width < 140 {
+				length := m.width - 10
+				if length < 30 {
+					return 30
+				}
+				if length > 60 {
+					return 60
+				}
+				return length
+			} else {
+				length := m.width - 12
+				if length < 40 {
+					return 40
+				}
+				if length > 80 {
+					return 80
+				}
+				return length
+			}
+		}()
+
 		for i, note := range displayNotes {
 			cursor := "  "
 			if m.cursor == i {
 				cursor = "> "
 			}
 
-			// Truncate title if too long
+			// Truncate title
 			title := note.Title
-			maxTitleLength := m.width - 10 // Reserve space for cursor and border
-			if maxTitleLength < 20 {
-				maxTitleLength = 20
-			}
 			if len(title) > maxTitleLength {
 				title = title[:maxTitleLength-3] + "..."
 			}
 
-			s += fmt.Sprintf("%s%s\n", cursor, title)
+			// Apply selection styling
+			itemStyle := lipgloss.NewStyle()
+			if m.cursor == i {
+				itemStyle = itemStyle.Background(lipgloss.Color("#1E293B")).Padding(0, 1)
+			}
+
+			s += cursor + itemStyle.Render(title) + "\n"
 		}
 
 		if len(m.filteredNotes) > maxLines {
@@ -289,7 +355,11 @@ func (m *NotesListModel) View() string {
 	if m.searchMode {
 		s += "Search Mode: Type to search • Enter to confirm • Esc to exit\n"
 	} else {
-		s += "Controls: n (new) • e (edit) • d (delete) • ↑↓ (navigate) • Ctrl+S (search) • q (quit) • ? (help)"
+		controls := "n (new) • e (edit) • d (delete) • ↑↓ (navigate) • Ctrl+S (search) • q (quit) • ? (help)"
+		if m.width < 100 {
+			controls = "n new • e edit • d delete • ↑↓ navigate • Ctrl+S search • q quit • ? help"
+		}
+		s += controls + "\n"
 	}
 
 	return s
