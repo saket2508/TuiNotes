@@ -12,7 +12,7 @@ func TestNoteEditorView(t *testing.T) {
 	// Set some test data
 	editor.title = "Test Title"
 	editor.content = "Test content\nwith multiple lines"
-	editor.focused = false // Title should be active
+	editor.focused = 0 // Title should be active
 	editor.width = 80
 	editor.height = 24
 
@@ -49,7 +49,7 @@ func TestNoteEditorFocusSwitching(t *testing.T) {
 	editor.height = 24
 
 	// Test title focus (focused = false)
-	editor.focused = false
+	editor.focused = 0
 	view := editor.View()
 
 	if !strings.Contains(view, "[*] Title:") {
@@ -61,7 +61,7 @@ func TestNoteEditorFocusSwitching(t *testing.T) {
 	}
 
 	// Test content focus (focused = true)
-	editor.focused = true
+	editor.focused = 0
 	view = editor.View()
 
 	if !strings.Contains(view, "[ ] Title:") {

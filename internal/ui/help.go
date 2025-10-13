@@ -85,11 +85,21 @@ func (m *HelpModel) View() string {
 
 	// Editor shortcuts
 	s += helpSectionStyle.Render("Note Editor") + "\n"
-	s += formatHelpItem("Tab", "Switch between title and content")
+	s += formatHelpItem("Tab", "Switch between title/content/tags")
 	s += formatHelpItem("Ctrl+S", "Save note")
 	s += formatHelpItem("Esc", "Cancel and return to notes list")
-	s += formatHelpItem("Enter", "New line (in content)")
+	s += formatHelpItem("Enter", "New line (in content) / Confirm tag")
 	s += formatHelpItem("Backspace", "Delete character")
+	s += formatHelpItem("Space", "Separate tags")
+	s += "\n"
+
+	// Tag management shortcuts
+	s += helpSectionStyle.Render("Tag Management") + "\n"
+	s += formatHelpItem("Tab to Tags", "Switch to tag input field")
+	s += formatHelpItem("Type", "Add new tags (auto-suggests existing)")
+	s += formatHelpItem("Space/Enter", "Confirm tag addition")
+	s += formatHelpItem("↑/↓", "Navigate tag suggestions")
+	s += formatHelpItem("Esc", "Close tag suggestions")
 	s += "\n"
 
 	// General shortcuts
