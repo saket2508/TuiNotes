@@ -180,7 +180,7 @@ func (m *NoteEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Handle tab navigation between fields
 		if msg.String() == "tab" {
-			// Cycle through 0=title, 1=content, 2=tags
+			// Cycle through 0=title, 1=tags, 2=content (reordered)
 			m.focused = (m.focused + 1) % 3
 			m.updateFocus()
 			m.showSuggestions = false
@@ -192,10 +192,10 @@ func (m *NoteEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.focused {
 		case 0: // Title field
 			m.titleInput, _ = m.titleInput.Update(msg)
-		case 1: // Content field
-			m.contentInput, _ = m.contentInput.Update(msg)
-		case 2: // Tags field
+		case 1: // Tags field (moved from position 2)
 			m.handleTagInput(msg)
+		case 2: // Content field (moved from position 1)
+			m.contentInput, _ = m.contentInput.Update(msg)
 		}
 
 		// Update preview if split pane is active
@@ -269,16 +269,16 @@ func (m *NoteEditorModel) updateFocus() {
 	switch m.focused {
 	case 0: // Title field
 		m.titleInput.Focus()
-		m.contentInput.Blur()
 		m.tagInput.Blur()
-	case 1: // Content field
-		m.titleInput.Blur()
-		m.contentInput.Focus()
-		m.tagInput.Blur()
-	case 2: // Tags field
-		m.titleInput.Blur()
 		m.contentInput.Blur()
+	case 1: // Tags field (moved from position 2)
+		m.titleInput.Blur()
 		m.tagInput.Focus()
+		m.contentInput.Blur()
+	case 2: // Content field (moved from position 1)
+		m.titleInput.Blur()
+		m.tagInput.Blur()
+		m.contentInput.Focus()
 	}
 }
 
@@ -468,22 +468,20 @@ func (m *NoteEditorModel) View() string {
 	}
 }
 
-// renderSinglePaneView renders the traditional single editor view
+// renderSinglePaneView renders the traditional single editor view with orange highlights
 func (m *NoteEditorModel) renderSinglePaneView(mode string) string {
-	// Enhanced responsive title style
+	// Define warm colors for highlighting (matching notes list)
+	orangeHighlight := "#EA580C" // Orange
+
+	// Enhanced responsive title style with warm colors
 	titleStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#F1F5F9")).
-		Background(lipgloss.Color("#38BDF8")).
+		Background(lipgloss.Color(orangeHighlight)).
 		Bold(true).
 		Padding(0, 1).
 		MarginBottom(1)
 
 	s := titleStyle.Render(mode) + "\n\n"
-
-	tagLabelStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#94A3B8")).
-		Bold(true).
-		MarginBottom(0)
 
 	// Responsive field width calculations
 	fieldWidth := func() int {
@@ -520,12 +518,12 @@ func (m *NoteEditorModel) renderSinglePaneView(mode string) string {
 	m.titleInput.Width = titleFieldWidth - 4 // Account for padding and border
 	titleField := m.titleInput.View()
 
-	// Apply border styling to title input
+	// Apply orange border styling to title input
 	titleBorderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(func() lipgloss.Color {
 			if m.focused == 0 {
-				return lipgloss.Color("#38BDF8")
+				return lipgloss.Color(orangeHighlight)
 			}
 			return lipgloss.Color("#475569")
 		}()).
@@ -540,8 +538,14 @@ func (m *NoteEditorModel) renderSinglePaneView(mode string) string {
 
 	s += titleBorderStyle.Render(titleField) + "\n"
 
-	// Tags field
-	s += tagLabelStyle.Render("Tags:") + "\n"
+	// Tags field (moved before content)
+	tagsLabel := "Tags:"
+	if m.focused == 1 {
+		tagsLabel = "[*] " + tagsLabel
+	} else {
+		tagsLabel = "[ ] " + tagsLabel
+	}
+	s += tagsLabel + "\n"
 
 	// Display existing tags as horizontal badges
 	if len(m.tags) > 0 {
@@ -558,10 +562,10 @@ func (m *NoteEditorModel) renderSinglePaneView(mode string) string {
 	m.tagInput.Width = tagInputWidth - 4
 	tagInputField := m.tagInput.View()
 
-	// Simple styling for tag input (no border)
+	// Simple styling for tag input with orange highlight when focused
 	tagInputStyle := lipgloss.NewStyle().
 		Foreground(func() lipgloss.Color {
-			if m.focused == 2 {
+			if m.focused == 1 {
 				return lipgloss.Color("#F1F5F9")
 			}
 			return lipgloss.Color("#94A3B8")
@@ -570,9 +574,9 @@ func (m *NoteEditorModel) renderSinglePaneView(mode string) string {
 
 	s += tagInputStyle.Render(tagInputField) + "\n\n"
 
-	// Content field
+	// Content field (moved to position 2)
 	contentLabel := "Content:"
-	if m.focused == 1 {
+	if m.focused == 2 {
 		contentLabel = "[*] " + contentLabel
 	} else {
 		contentLabel = "[ ] " + contentLabel
@@ -588,17 +592,17 @@ func (m *NoteEditorModel) renderSinglePaneView(mode string) string {
 	contentField := m.contentInput.View()
 	// Note: textarea dimensions are controlled via styling, not direct width/height assignment
 
-	// Apply border styling to content area
+	// Apply orange border styling to content area
 	contentBorderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(func() lipgloss.Color {
-			if m.focused == 1 {
-				return lipgloss.Color("#38BDF8")
+			if m.focused == 2 {
+				return lipgloss.Color(orangeHighlight)
 			}
 			return lipgloss.Color("#475569")
 		}()).
 		Foreground(func() lipgloss.Color {
-			if m.focused == 1 {
+			if m.focused == 2 {
 				return lipgloss.Color("#F1F5F9")
 			}
 			return lipgloss.Color("#94A3B8")
@@ -621,7 +625,7 @@ func (m *NoteEditorModel) renderSinglePaneView(mode string) string {
 	}
 	s += controlsStyle.Render(controls) + "\n"
 
-	if m.focused == 2 {
+	if m.focused == 1 {
 		tagHelp := "Tags: Type to add • Space/Enter to confirm • ↑↓ to navigate suggestions"
 		if m.width < 100 {
 			tagHelp = "Tags: Type • Space/Enter to add • ↑↓ for suggestions"
@@ -629,7 +633,7 @@ func (m *NoteEditorModel) renderSinglePaneView(mode string) string {
 		s += controlsStyle.Render(tagHelp) + "\n"
 	}
 
-	// Enhanced tag suggestions
+	// Enhanced tag suggestions with orange accent
 	if m.showSuggestions && len(m.tagSuggestions) > 0 {
 		suggestionBox := ""
 		maxSuggestions := 5
@@ -645,7 +649,7 @@ func (m *NoteEditorModel) renderSinglePaneView(mode string) string {
 		}
 		suggestionStyle := lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#38BDF8")).
+			BorderForeground(lipgloss.Color(orangeHighlight)).
 			Background(lipgloss.Color("#0F172A")).
 			Foreground(lipgloss.Color("#F1F5F9")).
 			Padding(0, 1)
@@ -655,12 +659,15 @@ func (m *NoteEditorModel) renderSinglePaneView(mode string) string {
 	return s
 }
 
-// renderSplitPaneView renders the split-pane editor view
+// renderSplitPaneView renders the split-pane editor view with orange highlights
 func (m *NoteEditorModel) renderSplitPaneView(mode string) string {
-	// Enhanced responsive title style
+	// Define warm colors for highlighting (matching notes list)
+	orangeHighlight := "#EA580C" // Orange
+
+	// Enhanced responsive title style with warm colors
 	titleStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#F1F5F9")).
-		Background(lipgloss.Color("#38BDF8")).
+		Background(lipgloss.Color(orangeHighlight)).
 		Bold(true).
 		Padding(0, 1).
 		MarginBottom(1)
@@ -671,10 +678,10 @@ func (m *NoteEditorModel) renderSplitPaneView(mode string) string {
 	editorWidth := (m.width - 8) / 2          // Account for borders and spacing
 	previewWidth := m.width - editorWidth - 4 // Leave space for borders
 
-	// Enhanced editor pane
+	// Enhanced editor pane with orange accent
 	editorPane := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#475569")).
+		BorderForeground(lipgloss.Color(orangeHighlight)). // Orange accent
 		Width(editorWidth).
 		Height(m.height - 8).
 		Padding(1)
@@ -682,10 +689,10 @@ func (m *NoteEditorModel) renderSplitPaneView(mode string) string {
 	editorContent := m.renderEditorContent(editorWidth-4, m.height-10)
 	editorBox := editorPane.Render(editorContent)
 
-	// Enhanced preview pane with cyan accent
+	// Enhanced preview pane with orange accent
 	previewPane := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#38BDF8")). // Cyan accent
+		BorderForeground(lipgloss.Color(orangeHighlight)). // Orange accent
 		Width(previewWidth).
 		Height(m.height - 8).
 		Padding(1)
@@ -711,8 +718,11 @@ func (m *NoteEditorModel) renderSplitPaneView(mode string) string {
 	return s
 }
 
-// renderEditorContent renders the editor content for split-pane view
+// renderEditorContent renders the editor content for split-pane view with orange highlights
 func (m *NoteEditorModel) renderEditorContent(width, height int) string {
+	// Define warm colors for highlighting (matching notes list)
+	orangeHighlight := "#EA580C" // Orange
+
 	s := ""
 
 	// Label style
@@ -737,12 +747,12 @@ func (m *NoteEditorModel) renderEditorContent(width, height int) string {
 	m.titleInput.Width = fieldWidth
 	titleField := m.titleInput.View()
 
-	// Apply border styling to title input
+	// Apply orange border styling to title input
 	titleBorderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(func() lipgloss.Color {
 			if m.focused == 0 {
-				return lipgloss.Color("#38BDF8")
+				return lipgloss.Color(orangeHighlight)
 			}
 			return lipgloss.Color("#475569")
 		}()).
@@ -756,8 +766,14 @@ func (m *NoteEditorModel) renderEditorContent(width, height int) string {
 
 	s += titleBorderStyle.Render(titleField) + "\n"
 
-	// Tags section
-	s += labelStyle.Render("Tags:") + "\n"
+	// Tags section (moved before content)
+	tagsLabel := "Tags:"
+	if m.focused == 1 {
+		tagsLabel = "[*] " + tagsLabel
+	} else {
+		tagsLabel = "[ ] " + tagsLabel
+	}
+	s += labelStyle.Render(tagsLabel) + "\n"
 
 	// Display existing tags as horizontal badges
 	if len(m.tags) > 0 {
@@ -774,10 +790,10 @@ func (m *NoteEditorModel) renderEditorContent(width, height int) string {
 	m.tagInput.Width = tagInputWidth - 4
 	tagInputField := m.tagInput.View()
 
-	// Simple styling for tag input (no border)
+	// Simple styling for tag input with orange highlight when focused
 	tagInputStyle := lipgloss.NewStyle().
 		Foreground(func() lipgloss.Color {
-			if m.focused == 2 {
+			if m.focused == 1 {
 				return lipgloss.Color("#F1F5F9")
 			}
 			return lipgloss.Color("#94A3B8")
@@ -786,9 +802,9 @@ func (m *NoteEditorModel) renderEditorContent(width, height int) string {
 
 	s += tagInputStyle.Render(tagInputField) + "\n\n"
 
-	// Content section
+	// Content section (moved to position 2)
 	contentLabel := "Content:"
-	if m.focused == 1 {
+	if m.focused == 2 {
 		contentLabel = "[*] " + contentLabel
 	} else {
 		contentLabel = "[ ] " + contentLabel
@@ -803,17 +819,17 @@ func (m *NoteEditorModel) renderEditorContent(width, height int) string {
 	contentField := m.contentInput.View()
 	// Note: textarea dimensions are controlled via styling, not direct width/height assignment
 
-	// Apply border styling to content area
+	// Apply orange border styling to content area
 	contentBorderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(func() lipgloss.Color {
-			if m.focused == 1 {
-				return lipgloss.Color("#38BDF8")
+			if m.focused == 2 {
+				return lipgloss.Color(orangeHighlight)
 			}
 			return lipgloss.Color("#475569")
 		}()).
 		Foreground(func() lipgloss.Color {
-			if m.focused == 1 {
+			if m.focused == 2 {
 				return lipgloss.Color("#F1F5F9")
 			}
 			return lipgloss.Color("#94A3B8")

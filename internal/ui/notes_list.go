@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 
 	"markdown-note-taking-app/internal/models"
 	"markdown-note-taking-app/internal/utils"
@@ -12,14 +13,14 @@ import (
 
 // NotesListModel manages the notes list view
 type NotesListModel struct {
-	app          *App
-	allNotes     []*models.Note // Store all notes
+	app           *App
+	allNotes      []*models.Note // Store all notes
 	filteredNotes []*models.Note // Store filtered notes for search
-	selectedNote *models.Note
-	cursor       int
-	loaded       bool
-	width        int
-	height       int
+	selectedNote  *models.Note
+	cursor        int
+	loaded        bool
+	width         int
+	height        int
 
 	// Search functionality
 	searchQuery string
@@ -151,7 +152,7 @@ func (m *NotesListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.cursor < len(m.filteredNotes)-1 {
 					m.cursor++
 				}
-			case "n":
+			case "n", "N":
 				// New note
 				m.selectedNote = nil
 				return m.app, m.app.SwitchToView(ViewNoteEditor)
@@ -167,6 +168,12 @@ func (m *NotesListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.selectedNote = nil
 					return m.app, m.deleteNote()
 				}
+			case "h", "H":
+				// Help
+				return m.app, m.app.SwitchToView(ViewHelp)
+			case "ctrl+c":
+				// Quit
+				return m.app, tea.Quit
 			}
 		}
 	}
@@ -191,143 +198,178 @@ func (m *NotesListModel) deleteNote() tea.Cmd {
 	}
 }
 
-// View renders the notes list
-func (m *NotesListModel) View() string {
-	if !m.loaded {
-		return "Loading notes..."
+// renderGradientHeader creates a beautiful gradient Noteshell header
+func (m *NotesListModel) renderGradientHeader() string {
+	// ASCII art for Noteshell with gradient colors
+	asciiArt := []string{
+		"██████╗  ██╗   ██╗██╗██╗     ██╗     ███╗   ██╗ ██████╗ ████████╗███████╗███████╗",
+		"██╔═══██╗██║   ██║██║██║     ██║     ████╗  ██║██╔═══██╗╚══██╔══╝██╔════╝██╔════╝",
+		"██║   ██║██║   ██║██║██║     ██║     ██╔██╗ ██║██║   ██║   ██║   █████╗  ███████╗",
+		"██║▄▄ ██║██║   ██║██║██║     ██║     ██║╚██╗██║██║   ██║   ██║   ██╔══╝  ╚════██║",
+		"╚██████╔╝╚██████╔╝██║███████╗███████╗██║ ╚████║╚██████╔╝   ██║   ███████╗███████║",
+		" ╚══▀▀═╝  ╚═════╝ ╚═╝╚══════╝╚══════╝╚═╝  ╚═══╝ ╚═════╝    ╚═╝   ╚══════╝╚══════╝",
 	}
 
-	// Use enhanced colors but keep current structure for now
-	titleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#F1F5F9")).
-		Background(lipgloss.Color("#38BDF8")).
-		Bold(true).
-		Padding(0, 1).
+	// Gradient colors from orange to amber to yellow (warm theme)
+	colors := []string{
+		"#EA580C", // Deep Orange
+		"#F97316", // Orange
+		"#FB923C", // Light Orange
+		"#F59E0B", // Amber
+		"#FBBF24", // Yellow
+		"#FCD34D", // Light Yellow
+	}
+
+	// Apply gradient to each line
+	var gradientLines []string
+	for i, line := range asciiArt {
+		color := colors[i%len(colors)]
+		style := lipgloss.NewStyle().
+			Foreground(lipgloss.Color(color)).
+			Bold(true)
+		gradientLines = append(gradientLines, style.Render(line))
+	}
+
+	// Subtitle with elegant typography (reduced margin)
+	subtitleStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#94A3B8")).
+		Italic(true).
+		MarginTop(0).
+		MarginBottom(0)
+
+	subtitle := subtitleStyle.Render("  ── Your terminal-based markdown note-taking shell ──")
+
+	// Combine all parts
+	header := strings.Join(gradientLines, "\n")
+	return header + "\n" + subtitle
+}
+
+// renderQuickActions creates minimal keyboard shortcuts info
+func (m *NotesListModel) renderQuickActions() string {
+	// Minimal shortcuts display
+	shortcutsStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#64748B")).
+		Italic(true).
 		MarginBottom(1)
 
+	shortcuts := shortcutsStyle.Render("N: New • S: Search • ↑↓: Navigate • Enter: Edit • Ctrl+C: Quit")
+	return shortcuts
+}
+
+
+// View renders the notes list with centered layout and orange/yellow highlighting
+func (m *NotesListModel) View() string {
+	if !m.loaded {
+		return lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#94A3B8")).
+			Bold(true).
+			Render("Loading notes...")
+	}
+
+	// Define warm colors for highlighting
+	orangeHighlight := "#EA580C" // Orange
+
+	// Search styling - redesigned to look like an input field
 	searchActiveStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#38BDF8")).
+		BorderForeground(lipgloss.Color(orangeHighlight)).
+		Background(lipgloss.Color("#1F2937")). // Dark background like input fields
 		Foreground(lipgloss.Color("#F1F5F9")).
-		Padding(0, 1)
+		Padding(0, 2).
+		Width(40) // Fixed width like a proper input field
 
 	searchInactiveStyle := lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
+		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#475569")).
+		Background(lipgloss.Color("#0F172A")). // Subtle background
 		Foreground(lipgloss.Color("#94A3B8")).
-		Padding(0, 1)
+		Padding(0, 2).
+		Width(40) // Consistent width
 
 	searchLabelStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#38BDF8")).
+		Foreground(lipgloss.Color(orangeHighlight)).
 		Bold(true)
 
-	s := titleStyle.Render("Markdown Notes") + "\n\n"
+	// Build the content
+	content := m.renderGradientHeader() + "\n\n"
 
-	// Calculate responsive search width
-	searchWidth := func() int {
-		if m.width < 100 {
-			if m.width-10 < 40 {
-				return 40
-			}
-			return m.width - 10
-		} else if m.width < 140 {
-			width := int(float64(m.width) * 0.7)
-			if width < 50 {
-				return 50
-			}
-			if width > 80 {
-				return 80
-			}
-			return width
-		} else {
-			width := int(float64(m.width) * 0.6)
-			if width < 60 {
-				return 60
-			}
-			if width > 100 {
-				return 100
-			}
-			return width
-		}
-	}()
+	// Minimal shortcuts
+	content += m.renderQuickActions() + "\n\n"
 
-	// Search interface
+	// Search interface - redesigned as an input field
+	content += searchLabelStyle.Render("Search:") + "\n"
 	if m.searchMode {
-		s += searchLabelStyle.Render("Search:") + " "
 		if m.searchQuery == "" {
-			s += searchActiveStyle.Width(searchWidth).Render("Type to search...")
+			// Active state with placeholder
+			placeholderStyle := searchActiveStyle.
+				Foreground(lipgloss.Color("#64748B")) // Dimmed placeholder text
+			content += placeholderStyle.Render("Type your search query...")
 		} else {
-			s += searchActiveStyle.Width(searchWidth).Render(m.searchQuery + "_")
+			// Active state with cursor
+			cursorStyle := searchActiveStyle.
+				Foreground(lipgloss.Color("#F1F5F9"))
+			content += cursorStyle.Render(m.searchQuery + "▏") // Better cursor indicator
 		}
 	} else {
-		s += searchLabelStyle.Render("Search:") + " "
 		if m.searchQuery != "" {
-			s += searchInactiveStyle.Width(searchWidth).Render(m.searchQuery)
-			s += fmt.Sprintf(" (%d results)", len(m.filteredNotes))
+			// Show search query with results count
+			content += searchInactiveStyle.Render(m.searchQuery)
+			content += lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#F59E0B")).
+				Render(fmt.Sprintf(" (%d results)", len(m.filteredNotes)))
 		} else {
-			s += searchInactiveStyle.Width(searchWidth).Render("Press Ctrl+S to search")
+			// Inactive state with prompt
+			promptStyle := searchInactiveStyle.
+				Foreground(lipgloss.Color("#64748B"))
+			content += promptStyle.Render("Press Ctrl+S to search")
 		}
 	}
 
-	s += "\n\n"
+	content += "\n\n"
 
-	// Notes list
+	// Notes list with orange/yellow highlighting
 	if len(m.filteredNotes) == 0 {
 		if m.searchQuery != "" {
-			s += "No notes found matching \"" + m.searchQuery + "\"\n\n"
+			content += lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#94A3B8")).
+				Italic(true).
+				Render("No notes found matching \"" + m.searchQuery + "\"")
 		} else {
-			s += "No notes yet. Press 'n' to create your first note.\n\n"
+			content += lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#94A3B8")).
+				Italic(true).
+				Render("No notes yet. Press 'n' to create your first note.")
 		}
 	} else {
 		// Calculate responsive max lines
-		usedHeight := 8
+		usedHeight := 6 // Reduced from 8
 		available := m.height - usedHeight - 4
-		maxLines := available
-		if maxLines < 5 {
-			maxLines = 5
-		}
+		maxLines := max(available, 5)
 
 		displayNotes := m.filteredNotes
 		if len(displayNotes) > maxLines {
 			displayNotes = displayNotes[:maxLines]
 		}
 
-		// Calculate responsive title length
+		// Calculate responsive title length (more generous)
 		maxTitleLength := func() int {
-			if m.width < 100 {
-				length := m.width - 8
-				if length < 20 {
-					return 20
-				}
-				if length > 40 {
-					return 40
-				}
-				return length
-			} else if m.width < 140 {
-				length := m.width - 10
-				if length < 30 {
-					return 30
-				}
-				if length > 60 {
-					return 60
-				}
-				return length
+			if m.width < 80 {
+				return m.width - 15
+			} else if m.width < 120 {
+				return m.width - 20
 			} else {
-				length := m.width - 12
-				if length < 40 {
-					return 40
-				}
-				if length > 80 {
-					return 80
-				}
-				return length
+				return 60 // Cap at 60 for readability
 			}
 		}()
 
 		for i, note := range displayNotes {
+			// Orange/amber cursor for selected item
 			cursor := "  "
 			if m.cursor == i {
-				cursor = "> "
+				cursor = lipgloss.NewStyle().
+					Foreground(lipgloss.Color(orangeHighlight)).
+					Bold(true).
+					Render("▶ ")
 			}
 
 			// Truncate title
@@ -336,33 +378,62 @@ func (m *NotesListModel) View() string {
 				title = title[:maxTitleLength-3] + "..."
 			}
 
-			// Apply selection styling
+			// Apply orange/yellow highlighting for selected notes
 			itemStyle := lipgloss.NewStyle()
 			if m.cursor == i {
-				itemStyle = itemStyle.Background(lipgloss.Color("#1E293B")).Padding(0, 1)
+				// Orange to amber gradient background
+				itemStyle = itemStyle.
+					Background(lipgloss.Color(orangeHighlight)).
+					Foreground(lipgloss.Color("#0F172A")).
+					Bold(true).
+					Padding(0, 1).
+					MarginLeft(1).
+					MarginRight(1)
+			} else {
+				// Subtle yellow background for non-selected
+				itemStyle = itemStyle.
+					Background(lipgloss.Color("#1F2937")). // Dark background
+					Foreground(lipgloss.Color("#F1F5F9")).
+					Padding(0, 1).
+					MarginLeft(1).
+					MarginRight(1)
 			}
 
-			s += cursor + itemStyle.Render(title) + "\n"
+			content += cursor + itemStyle.Render(title) + "\n"
 		}
 
 		if len(m.filteredNotes) > maxLines {
-			s += fmt.Sprintf("... and %d more\n", len(m.filteredNotes)-maxLines)
+			content += lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#64748B")).
+				Italic(true).
+				Render(fmt.Sprintf("... and %d more", len(m.filteredNotes)-maxLines))
 		}
 	}
 
-	// Controls
-	s += "\n"
-	if m.searchMode {
-		s += "Search Mode: Type to search • Enter to confirm • Esc to exit\n"
-	} else {
-		controls := "n (new) • e (edit) • d (delete) • ↑↓ (navigate) • Ctrl+S (search) • q (quit) • ? (help)"
-		if m.width < 100 {
-			controls = "n new • e edit • d delete • ↑↓ navigate • Ctrl+S search • q quit • ? help"
-		}
-		s += controls + "\n"
-	}
+	// Wrap everything in a centered container
+	containerWidth := min(m.width-4, 100) // Max 100 chars width
+	containerStyle := lipgloss.NewStyle().
+		Width(containerWidth).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#334155")).
+		Padding(2, 2).
+		Background(lipgloss.Color("#0F172A"))
 
-	return s
+	centeredContent := lipgloss.Place(
+			m.width, m.height,
+			lipgloss.Center, lipgloss.Center,
+			containerStyle.Render(content),
+	)
+
+	return centeredContent
+}
+
+// Helper function
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // Messages

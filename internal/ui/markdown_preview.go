@@ -27,12 +27,12 @@ var (
 
 // MarkdownPreviewModel manages the markdown preview view
 type MarkdownPreviewModel struct {
-	content    string
-	rendered   string
-	width      int
-	height     int
-	scrollPos  int
-	showPreview bool
+	content      string
+	rendered     string
+	width        int
+	height       int
+	scrollPos    int
+	showPreview  bool
 }
 
 // NewMarkdownPreviewModel creates a new markdown preview model
@@ -68,27 +68,51 @@ func (m *MarkdownPreviewModel) IsShowing() bool {
 	return m.showPreview
 }
 
-// renderMarkdown converts markdown content to terminal-friendly format
+// renderMarkdown converts markdown content to terminal-friendly format using enhanced processing
 func (m *MarkdownPreviewModel) renderMarkdown() {
 	if m.content == "" {
 		m.rendered = ""
 		return
 	}
 
-	// Simple markdown to terminal format conversion
+	// Use enhanced markdown processing with inline formatting
+	m.rendered = m.enhancedMarkdownRender()
+}
+
+// enhancedMarkdownRender provides enhanced markdown processing with inline formatting
+func (m *MarkdownPreviewModel) enhancedMarkdownRender() string {
 	lines := strings.Split(m.content, "\n")
 	var result []string
+	inCodeBlock := false
 
 	for _, line := range lines {
-		processedLine := m.processMarkdownLine(line)
+		// Handle code blocks
+		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			if inCodeBlock {
+				inCodeBlock = false
+				result = append(result, m.styleCodeBlock(line))
+			} else {
+				inCodeBlock = true
+				result = append(result, m.styleCodeBlock(line))
+			}
+			continue
+		}
+
+		if inCodeBlock {
+			result = append(result, m.styleCodeBlock(line))
+			continue
+		}
+
+		// Handle other markdown elements
+		processedLine := m.processEnhancedLine(line)
 		result = append(result, processedLine...)
 	}
 
-	m.rendered = strings.Join(result, "\n")
+	return strings.Join(result, "\n")
 }
 
-// processMarkdownLine processes a single line of markdown
-func (m *MarkdownPreviewModel) processMarkdownLine(line string) []string {
+// processEnhancedLine processes a line with inline formatting
+func (m *MarkdownPreviewModel) processEnhancedLine(line string) []string {
 	trimmed := strings.TrimSpace(line)
 	if trimmed == "" {
 		return []string{""}
@@ -100,13 +124,10 @@ func (m *MarkdownPreviewModel) processMarkdownLine(line string) []string {
 	}
 
 	// Handle lists
-	if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") {
+	if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") ||
+	   strings.HasPrefix(trimmed, "1. ") || strings.HasPrefix(trimmed, "2. ") ||
+	   strings.HasPrefix(trimmed, "3. ") || strings.HasPrefix(trimmed, "4. ") {
 		return []string{m.styleListItem(trimmed)}
-	}
-
-	// Handle code blocks
-	if strings.HasPrefix(trimmed, "```") {
-		return []string{m.styleCodeBlock(trimmed)}
 	}
 
 	// Handle blockquotes
@@ -114,9 +135,154 @@ func (m *MarkdownPreviewModel) processMarkdownLine(line string) []string {
 		return []string{m.styleBlockquote(trimmed)}
 	}
 
-	// Regular paragraph
-	return []string{m.styleParagraph(trimmed)}
+	// Handle thematic breaks
+	if strings.HasPrefix(trimmed, "---") || strings.HasPrefix(trimmed, "***") {
+		return []string{m.styleThematicBreak()}
+	}
+
+	// Regular paragraph with inline formatting
+	return []string{m.processInlineFormatting(trimmed)}
 }
+
+// processInlineFormatting handles inline markdown elements
+func (m *MarkdownPreviewModel) processInlineFormatting(text string) string {
+	// Process inline code spans first
+	text = m.processInlineCode(text)
+
+	// Process bold text
+	text = m.processBoldText(text)
+
+	// Process italic text
+	text = m.processItalicText(text)
+
+	// Process links
+	text = m.processLinks(text)
+
+	// Apply base style
+	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#F1F5F9"))
+	return style.Render(text)
+}
+
+// processInlineCode handles `code` spans
+func (m *MarkdownPreviewModel) processInlineCode(text string) string {
+	// Simple regex-like approach for inline code
+	result := text
+	for {
+		start := strings.Index(result, "`")
+		if start == -1 {
+			break
+		}
+		end := strings.Index(result[start+1:], "`")
+		if end == -1 {
+			break
+		}
+		end = start + 1 + end
+
+		codeContent := result[start+1 : end]
+		style := lipgloss.NewStyle().
+			Background(lipgloss.Color("#374151")).
+			Foreground(lipgloss.Color("#10B981"))
+
+		result = result[:start] + style.Render(codeContent) + result[end+1:]
+	}
+	return result
+}
+
+// processBoldText handles **bold** text
+func (m *MarkdownPreviewModel) processBoldText(text string) string {
+	result := text
+	for {
+		start := strings.Index(result, "**")
+		if start == -1 {
+			break
+		}
+		end := strings.Index(result[start+2:], "**")
+		if end == -1 {
+			break
+		}
+		end = start + 2 + end
+
+		boldContent := result[start+2 : end]
+		style := lipgloss.NewStyle().Bold(true)
+
+		result = result[:start] + style.Render(boldContent) + result[end+2:]
+	}
+	return result
+}
+
+// processItalicText handles *italic* text
+func (m *MarkdownPreviewModel) processItalicText(text string) string {
+	result := text
+	for {
+		start := strings.Index(result, "*")
+		if start == -1 {
+			break
+		}
+		end := strings.Index(result[start+1:], "*")
+		if end == -1 {
+			break
+		}
+		end = start + 1 + end
+
+		// Skip if this is actually bold (already processed)
+		if start > 0 && result[start-1] == '*' {
+			start++
+			continue
+		}
+		if end < len(result)-1 && result[end+1] == '*' {
+			continue
+		}
+
+		italicContent := result[start+1 : end]
+		style := lipgloss.NewStyle().Italic(true)
+
+		result = result[:start] + style.Render(italicContent) + result[end+1:]
+	}
+	return result
+}
+
+// processLinks handles [text](url) links
+func (m *MarkdownPreviewModel) processLinks(text string) string {
+	result := text
+	for {
+		start := strings.Index(result, "[")
+		if start == -1 {
+			break
+		}
+		mid := strings.Index(result[start+1:], "]")
+		if mid == -1 {
+			break
+		}
+		mid = start + 1 + mid
+
+		if result[mid] != '(' {
+			break
+		}
+		end := strings.Index(result[mid+1:], ")")
+		if end == -1 {
+			break
+		}
+		end = mid + 1 + end
+
+		linkText := result[start+1 : mid]
+		linkURL := result[mid+1 : end]
+
+		style := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#38BDF8")).
+			Underline(true)
+
+		result = result[:start] + style.Render(linkText) + lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#64748B")).Render(" [" + linkURL + "]") + result[end+1:]
+	}
+	return result
+}
+
+// styleThematicBreak styles thematic breaks
+func (m *MarkdownPreviewModel) styleThematicBreak() string {
+	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#475569"))
+	return style.Render(strings.Repeat("─", min(m.width-4, 50)))
+}
+
 
 // processHeading processes heading lines
 func (m *MarkdownPreviewModel) processHeading(line string) []string {
@@ -173,11 +339,6 @@ func (m *MarkdownPreviewModel) styleBlockquote(line string) string {
 	return style.Render("│ " + content)
 }
 
-// styleParagraph styles regular text
-func (m *MarkdownPreviewModel) styleParagraph(line string) string {
-	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#F1F5F9"))
-	return style.Render(line)
-}
 
 // Update handles updates for the markdown preview
 func (m *MarkdownPreviewModel) Update(msg tea.Msg) tea.Cmd {
