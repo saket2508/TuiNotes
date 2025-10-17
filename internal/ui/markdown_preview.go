@@ -10,29 +10,29 @@ import (
 
 var (
 	previewStyle = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("62")).
-		Padding(1).
-		MarginLeft(1)
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("62")).
+			Padding(1).
+			MarginLeft(1)
 
 	previewTitleStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFDF5")).
-			Background(lipgloss.Color("#25A065")).
-			Padding(0, 1).
-			MarginBottom(1)
+				Foreground(lipgloss.Color("#FFFDF5")).
+				Background(lipgloss.Color("#25A065")).
+				Padding(0, 1).
+				MarginBottom(1)
 
 	previewContentStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#F1F5F9"))
+				Foreground(lipgloss.Color("#F1F5F9"))
 )
 
 // MarkdownPreviewModel manages the markdown preview view
 type MarkdownPreviewModel struct {
-	content      string
-	rendered     string
-	width        int
-	height       int
-	scrollPos    int
-	showPreview  bool
+	content     string
+	rendered    string
+	width       int
+	height      int
+	scrollPos   int
+	showPreview bool
 }
 
 // NewMarkdownPreviewModel creates a new markdown preview model
@@ -68,47 +68,30 @@ func (m *MarkdownPreviewModel) IsShowing() bool {
 	return m.showPreview
 }
 
-// renderMarkdown converts markdown content to terminal-friendly format using enhanced processing
+// renderMarkdown converts markdown content to terminal-friendly format
 func (m *MarkdownPreviewModel) renderMarkdown() {
 	if m.content == "" {
 		m.rendered = ""
 		return
 	}
 
-	// Use enhanced markdown processing with inline formatting
-	m.rendered = m.enhancedMarkdownRender()
-}
-
-// enhancedMarkdownRender provides enhanced markdown processing with inline formatting
-func (m *MarkdownPreviewModel) enhancedMarkdownRender() string {
+	// For now, use the enhanced native markdown processing
+	// This is more stable and provides better terminal formatting
 	lines := strings.Split(m.content, "\n")
-	var result []string
-	inCodeBlock := false
+	var renderedLines []string
 
 	for _, line := range lines {
-		// Handle code blocks
-		if strings.HasPrefix(strings.TrimSpace(line), "```") {
-			if inCodeBlock {
-				inCodeBlock = false
-				result = append(result, m.styleCodeBlock(line))
-			} else {
-				inCodeBlock = true
-				result = append(result, m.styleCodeBlock(line))
-			}
+		if strings.TrimSpace(line) == "" {
+			renderedLines = append(renderedLines, "")
 			continue
 		}
 
-		if inCodeBlock {
-			result = append(result, m.styleCodeBlock(line))
-			continue
-		}
-
-		// Handle other markdown elements
-		processedLine := m.processEnhancedLine(line)
-		result = append(result, processedLine...)
+		// Process each line with enhanced markdown formatting
+		processedLines := m.processEnhancedLine(line)
+		renderedLines = append(renderedLines, processedLines...)
 	}
 
-	return strings.Join(result, "\n")
+	m.rendered = strings.Join(renderedLines, "\n")
 }
 
 // processEnhancedLine processes a line with inline formatting
@@ -125,8 +108,8 @@ func (m *MarkdownPreviewModel) processEnhancedLine(line string) []string {
 
 	// Handle lists
 	if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") ||
-	   strings.HasPrefix(trimmed, "1. ") || strings.HasPrefix(trimmed, "2. ") ||
-	   strings.HasPrefix(trimmed, "3. ") || strings.HasPrefix(trimmed, "4. ") {
+		strings.HasPrefix(trimmed, "1. ") || strings.HasPrefix(trimmed, "2. ") ||
+		strings.HasPrefix(trimmed, "3. ") || strings.HasPrefix(trimmed, "4. ") {
 		return []string{m.styleListItem(trimmed)}
 	}
 
@@ -272,7 +255,7 @@ func (m *MarkdownPreviewModel) processLinks(text string) string {
 			Underline(true)
 
 		result = result[:start] + style.Render(linkText) + lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#64748B")).Render(" [" + linkURL + "]") + result[end+1:]
+			Foreground(lipgloss.Color("#64748B")).Render(" ["+linkURL+"]") + result[end+1:]
 	}
 	return result
 }
@@ -282,7 +265,6 @@ func (m *MarkdownPreviewModel) styleThematicBreak() string {
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#475569"))
 	return style.Render(strings.Repeat("─", min(m.width-4, 50)))
 }
-
 
 // processHeading processes heading lines
 func (m *MarkdownPreviewModel) processHeading(line string) []string {
@@ -321,15 +303,6 @@ func (m *MarkdownPreviewModel) styleListItem(line string) string {
 	return style.Render("• " + content)
 }
 
-// styleCodeBlock styles a code block
-func (m *MarkdownPreviewModel) styleCodeBlock(line string) string {
-	style := lipgloss.NewStyle().
-		Background(lipgloss.Color("#1F2937")).
-		Foreground(lipgloss.Color("#10B981")).
-		Padding(0, 1)
-	return style.Render(line)
-}
-
 // styleBlockquote styles a blockquote
 func (m *MarkdownPreviewModel) styleBlockquote(line string) string {
 	style := lipgloss.NewStyle().
@@ -338,7 +311,6 @@ func (m *MarkdownPreviewModel) styleBlockquote(line string) string {
 	content := strings.TrimSpace(line[2:]) // Remove "> "
 	return style.Render("│ " + content)
 }
-
 
 // Update handles updates for the markdown preview
 func (m *MarkdownPreviewModel) Update(msg tea.Msg) tea.Cmd {
