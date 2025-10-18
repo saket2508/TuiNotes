@@ -10,8 +10,6 @@ import (
 
 var (
 	previewStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62")).
 			Padding(1).
 			MarginLeft(1)
 
@@ -403,7 +401,7 @@ func (m *MarkdownPreviewModel) View() string {
 	if len(lines) > maxLines {
 		percentage := float64(m.scrollPos) / float64(len(lines)-maxLines) * 100
 		scrollIndicator = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("62")).
+			Foreground(lipgloss.Color("#64748B")).
 			Render(fmt.Sprintf(" [%d%%] ", int(percentage)))
 	}
 
