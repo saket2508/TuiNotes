@@ -19,7 +19,7 @@ import (
 type NoteEditorModel struct {
 	app     *App
 	note    *models.Note
-	focused int    // 0=title, 1=content, 2=tags
+	focused int    // 0=title, 1=tags, 2=content
 	mode    string // "create" or "edit"
 	width   int
 	height  int
@@ -35,6 +35,11 @@ type NoteEditorModel struct {
 	tagSuggestions   []string
 	showSuggestions  bool
 	suggestionCursor int
+
+	// Enhanced tag editing
+	selectedTagIndex int  // -1 = no selection, 0+ = tag index
+	tagEditMode     bool  // true when editing a tag name
+	editingTagName  string // temporary storage for edited tag name
 
 	// Markdown preview
 	preview   *MarkdownPreviewModel
@@ -84,6 +89,9 @@ func NewNoteEditorModel(app *App) *NoteEditorModel {
 		tagSuggestions:   []string{},
 		showSuggestions:  false,
 		suggestionCursor: 0,
+		selectedTagIndex: -1, // No tag selected initially
+		tagEditMode:      false,
+		editingTagName:   "",
 		preview:          NewMarkdownPreviewModel(),
 		splitPane:        false,
 	}
@@ -108,9 +116,12 @@ func (m *NoteEditorModel) Init(selectedNote *models.Note) tea.Cmd {
 		m.tagInput.Blur()
 	}
 
-	// Reset tag suggestions
+	// Reset tag suggestions and tag editing state
 	m.showSuggestions = false
 	m.suggestionCursor = 0
+	m.selectedTagIndex = -1
+	m.tagEditMode = false
+	m.editingTagName = ""
 	return m.loadAvailableTags()
 }
 
@@ -271,18 +282,55 @@ func (m *NoteEditorModel) updateFocus() {
 		m.titleInput.Focus()
 		m.tagInput.Blur()
 		m.contentInput.Blur()
+		// Reset tag editing state when switching away from tags
+		m.deselectTag()
+		m.cancelEditTag()
 	case 1: // Tags field (moved from position 2)
 		m.titleInput.Blur()
-		m.tagInput.Focus()
+		m.tagInput.Focus() // Always focus tag input when tags field is active
 		m.contentInput.Blur()
 	case 2: // Content field (moved from position 1)
 		m.titleInput.Blur()
 		m.tagInput.Blur()
+		// Reset tag editing state when switching away from tags
+		m.deselectTag()
+		m.cancelEditTag()
 		m.contentInput.Focus()
 	}
 }
 
 func (m *NoteEditorModel) handleTagInput(msg tea.KeyMsg) {
+	// Handle tag editing mode first
+	if m.tagEditMode {
+		switch msg.String() {
+		case "enter":
+			m.finishEditTag()
+		case "esc":
+			m.cancelEditTag()
+		default:
+			// Update the editing tag name
+			m.tagInput, _ = m.tagInput.Update(msg)
+			m.editingTagName = m.tagInput.Value()
+		}
+		return
+	}
+
+	// Handle tag selection mode (when a tag is selected)
+	if m.selectedTagIndex >= 0 {
+		switch msg.String() {
+		case "left":
+			m.selectPreviousTag()
+		case "right":
+			m.selectNextTag()
+		case "delete", "backspace":
+			m.deleteSelectedTag()
+		case "esc":
+			m.deselectTag()
+		}
+		return
+	}
+
+	// Normal tag input handling
 	if m.showSuggestions {
 		// Handle suggestion navigation
 		switch msg.String() {
@@ -320,6 +368,16 @@ func (m *NoteEditorModel) handleTagInput(msg tea.KeyMsg) {
 
 		// Handle special keys that don't go through textinput normally
 		switch msg.String() {
+		case "left":
+			// Select last tag if there are tags
+			if len(m.tags) > 0 {
+				m.selectTag(len(m.tags) - 1)
+			}
+		case "right":
+			// Select first tag if there are tags
+			if len(m.tags) > 0 {
+				m.selectTag(0)
+			}
 		case "enter":
 			if len(newValue) > 0 {
 				m.addTag(newValue)
@@ -357,10 +415,94 @@ func (m *NoteEditorModel) addTag(tagName string) {
 	newTag := models.Tag{Name: tagName}
 	m.tags = append(m.tags, newTag)
 
-	// Clear input
+	// Clear input and deselect tag
 	m.tagInput.SetValue("")
 	m.showSuggestions = false
 	m.suggestionCursor = 0
+	m.deselectTag()
+}
+
+// Tag selection and editing functions
+func (m *NoteEditorModel) selectTag(index int) {
+	if index >= 0 && index < len(m.tags) {
+		m.selectedTagIndex = index
+		// Auto-enter edit mode when a tag is selected
+		m.startEditTag()
+		m.showSuggestions = false
+	}
+}
+
+func (m *NoteEditorModel) deselectTag() {
+	m.selectedTagIndex = -1
+}
+
+func (m *NoteEditorModel) selectPreviousTag() {
+	if m.selectedTagIndex > 0 {
+		m.selectTag(m.selectedTagIndex - 1)
+	} else if m.selectedTagIndex == 0 {
+		// Wrap to last tag
+		m.selectTag(len(m.tags) - 1)
+	}
+}
+
+func (m *NoteEditorModel) selectNextTag() {
+	if m.selectedTagIndex >= 0 && m.selectedTagIndex < len(m.tags)-1 {
+		m.selectTag(m.selectedTagIndex + 1)
+	} else if m.selectedTagIndex == len(m.tags)-1 {
+		// Wrap to first tag
+		m.selectTag(0)
+	}
+}
+
+func (m *NoteEditorModel) deleteSelectedTag() {
+	if m.selectedTagIndex >= 0 && m.selectedTagIndex < len(m.tags) {
+		// Remove tag from slice
+		m.tags = append(m.tags[:m.selectedTagIndex], m.tags[m.selectedTagIndex+1:]...)
+
+		// Adjust selection index
+		if m.selectedTagIndex >= len(m.tags) && len(m.tags) > 0 {
+			m.selectedTagIndex = len(m.tags) - 1
+		} else if len(m.tags) == 0 {
+			m.selectedTagIndex = -1
+		}
+	}
+}
+
+func (m *NoteEditorModel) startEditTag() {
+	if m.selectedTagIndex >= 0 && m.selectedTagIndex < len(m.tags) {
+		m.tagEditMode = true
+		m.editingTagName = m.tags[m.selectedTagIndex].Name
+		m.tagInput.SetValue(m.editingTagName)
+		m.tagInput.Focus()
+	}
+}
+
+func (m *NoteEditorModel) finishEditTag() {
+	if m.selectedTagIndex >= 0 && m.selectedTagIndex < len(m.tags) {
+		newName := strings.TrimSpace(m.editingTagName)
+		if newName != "" && newName != m.tags[m.selectedTagIndex].Name {
+			// Check for duplicate tag names
+			isDuplicate := false
+			for i, tag := range m.tags {
+				if i != m.selectedTagIndex && strings.EqualFold(tag.Name, newName) {
+					isDuplicate = true
+					break
+				}
+			}
+
+			if !isDuplicate {
+				// Update tag name
+				m.tags[m.selectedTagIndex].Name = newName
+			}
+		}
+	}
+	m.cancelEditTag()
+}
+
+func (m *NoteEditorModel) cancelEditTag() {
+	m.tagEditMode = false
+	m.editingTagName = ""
+	m.tagInput.SetValue("")
 }
 
 func (m *NoteEditorModel) updateTagSuggestions() {
@@ -412,44 +554,61 @@ func (m *NoteEditorModel) UpdatePreview() {
 
 // getTagBadgeStyle returns a badge style for tags (no borders, colored backgrounds)
 func (m *NoteEditorModel) getTagBadgeStyle(index int, _ string) lipgloss.Style {
+	// Define colors for different tag states
+	var bgColor, textColor lipgloss.Color
+	isSelected := m.selectedTagIndex == index
+	isEditing := m.tagEditMode && m.selectedTagIndex == index
+
 	// Cycle through different background colors for variety
 	switch index % 4 {
 	case 0:
 		// Cyan badge
-		return lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#0F172A")). // Dark text
-			Background(lipgloss.Color("#38BDF8")). // Cyan background
-			Padding(0, 1).
-			MarginRight(1)
+		bgColor = lipgloss.Color("#38BDF8")
 	case 1:
 		// Green badge
-		return lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#0F172A")). // Dark text
-			Background(lipgloss.Color("#4ADE80")). // Green background
-			Padding(0, 1).
-			MarginRight(1)
+		bgColor = lipgloss.Color("#4ADE80")
 	case 2:
 		// Purple badge
-		return lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#0F172A")). // Dark text
-			Background(lipgloss.Color("#C084FC")). // Purple background
-			Padding(0, 1).
-			MarginRight(1)
+		bgColor = lipgloss.Color("#C084FC")
 	case 3:
 		// Orange badge
-		return lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#0F172A")). // Dark text
-			Background(lipgloss.Color("#FB923C")). // Orange background
-			Padding(0, 1).
-			MarginRight(1)
+		bgColor = lipgloss.Color("#FB923C")
 	default:
 		// Default cyan badge
-		return lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#0F172A")). // Dark text
-			Background(lipgloss.Color("#38BDF8")). // Cyan background
-			Padding(0, 1).
-			MarginRight(1)
+		bgColor = lipgloss.Color("#38BDF8")
 	}
+
+	textColor = lipgloss.Color("#0F172A") // Dark text
+
+	// Build base style
+	style := lipgloss.NewStyle().
+		Background(bgColor).
+		Foreground(textColor).
+		Padding(0, 1).
+		MarginRight(1)
+
+	// Add selection styling
+	if isSelected && !isEditing {
+		style = style.
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#EA580C")). // Orange highlight
+			Background(func() lipgloss.Color {
+				if isSelected {
+					return lipgloss.Color("#FED7AA") // Light orange background when selected
+				}
+				return bgColor
+			}())
+	}
+
+	// Add editing styling
+	if isEditing {
+		style = style.
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#DC2626")). // Red border for editing
+			Background(lipgloss.Color("#FEF3C7"))       // Light yellow background when editing
+	}
+
+	return style
 }
 
 // View renders the note editor
@@ -552,7 +711,13 @@ func (m *NoteEditorModel) renderSinglePaneView(mode string) string {
 		s += " " // Start with space for better spacing
 		for i, tag := range m.tags {
 			badgeStyle := m.getTagBadgeStyle(i, tag.Name)
-			s += badgeStyle.Render(tag.Name) + " "
+			tagText := tag.Name
+			if m.selectedTagIndex == i && !m.tagEditMode {
+				tagText += " ★" // Add star indicator for selected tag
+			} else if m.tagEditMode && m.selectedTagIndex == i {
+				tagText = m.editingTagName // Show edited name when editing
+			}
+			s += badgeStyle.Render(tagText) + " "
 		}
 		s += "\n"
 	}
@@ -626,9 +791,19 @@ func (m *NoteEditorModel) renderSinglePaneView(mode string) string {
 	s += controlsStyle.Render(controls) + "\n"
 
 	if m.focused == 1 {
-		tagHelp := "Tags: Type to add • Space/Enter to confirm • ↑↓ to navigate suggestions"
+		var tagHelp string
+		if m.tagEditMode {
+			tagHelp = "Editing: Type new name • Enter: Save • Esc: Cancel"
+		} else {
+			tagHelp = "Tags: Type to add • ←→: Navigate tags • Del: Remove • Space/Enter: Confirm"
+		}
+
 		if m.width < 100 {
-			tagHelp = "Tags: Type • Space/Enter to add • ↑↓ for suggestions"
+			if m.tagEditMode {
+				tagHelp = "Edit: Type • Enter: Save • Esc: Cancel"
+			} else {
+				tagHelp = "Tags: Type • ←→: Navigate • Del: Remove • Space/Enter: Add"
+			}
 		}
 		s += controlsStyle.Render(tagHelp) + "\n"
 	}
@@ -780,7 +955,13 @@ func (m *NoteEditorModel) renderEditorContent(width, height int) string {
 		s += " " // Start with space for better spacing
 		for i, tag := range m.tags {
 			badgeStyle := m.getTagBadgeStyle(i, tag.Name)
-			s += badgeStyle.Render(tag.Name) + " "
+			tagText := tag.Name
+			if m.selectedTagIndex == i && !m.tagEditMode {
+				tagText += " ★" // Add star indicator for selected tag
+			} else if m.tagEditMode && m.selectedTagIndex == i {
+				tagText = m.editingTagName // Show edited name when editing
+			}
+			s += badgeStyle.Render(tagText) + " "
 		}
 		s += "\n"
 	}
